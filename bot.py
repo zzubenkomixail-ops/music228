@@ -1,4 +1,18 @@
 import os
+from flask import Flask
+import threading
+
+# Создаем Flask приложение для работы порта
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Music Bot is running!"
+
+def run_web_server():
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
+    import os
 import re
 import requests
 import asyncio
@@ -223,13 +237,34 @@ async def handle_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
 
+import os
+from flask import Flask
+import threading
+
+# Создаем Flask приложение для работы порта
+app_flask = Flask(__name__)
+
+@app_flask.route('/')
+def home():
+    return "Music Bot is running!"
+
+def run_web_server():
+    port = int(os.environ.get('PORT', 5000))
+    app_flask.run(host='0.0.0.0', port=port)
+
 # --- Основная точка входа ---
 def main():
-    token = BOT_TOKEN
+    token = os.environ.get('BOT_TOKEN')
     if not token:
         print("Error: please set BOT_TOKEN environment variable.")
         return
 
+    # Запускаем веб-сервер в отдельном потоке
+    web_thread = threading.Thread(target=run_web_server)
+    web_thread.daemon = True
+    web_thread.start()
+    
+    # Запускаем бота
     app = ApplicationBuilder().token(token).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_search))
