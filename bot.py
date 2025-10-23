@@ -1,135 +1,4 @@
-import os
-from flask import Flask
-import threading
-
-# Создаем Flask приложение для работы порта
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return "Music Bot is running!"
-
-def run_web_server():
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
-    import os
-import re
-import requests
-import asyncio
-from bs4 import BeautifulSoup
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    ContextTypes,
-    MessageHandler,
-    CallbackQueryHandler,
-    filters,
-)
-
-BOT_TOKEN = os.getenv("BOT_TOKEN")  # Установи эту переменную окружения на Render / локально
-
-HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; MusicBot/1.0)"}
-
-# --- Поиск ссылок на rus.hitmotop через DuckDuckGo HTML интерфейс ---
-def search_hitmotop(query, max_results=5):
-    """
-    Ищем страницы вида https://rus.hitmotop.com/song/<id> через DuckDuckGo HTML.
-    Возвращаем список URL'ов (максимум max_results).
-    """
-    ddg_url = "https://html.duckduckgo.com/html/"
-    params = {"q": f"site:rus.hitmotop.com/song {query}"}
-    try:
-        resp = requests.post(ddg_url, data=params, headers=HEADERS, timeout=15)
-        resp.raise_for_status()
-    except Exception as e:
-        print("Search request failed:", e)
-        return []
-
-    links = []
-    soup = BeautifulSoup(resp.text, "html.parser")
-    for a in soup.find_all("a", href=True):
-        href = a["href"]
-        # DuckDuckGo returns direct links or redirects; try to extract real rus.hitmotop links
-        if "rus.hitmotop.com/song/" in href:
-            # Clean up href if it's a redirect
-            m = re.search(r"(https?://rus\.hitmotop\.com/song/\d+)", href)
-            if m:
-                url = m.group(1)
-            else:
-                url = href.split("&uddg=")[-1] if "uddg=" in href else href
-            if url not in links:
-                links.append(url)
-        if len(links) >= max_results:
-            break
-    return links
-
-def extract_song_info(song_url):
-    """
-    Извлекает title/artist и прямую ссылку на mp3 (если есть) со страницы трека.
-    Возвращает (title, mp3_url) или (None, None) при неудаче.
-    """
-    try:
-        resp = requests.get(song_url, headers=HEADERS, timeout=15)
-        resp.raise_for_status()
-    except Exception as e:
-        print("Failed to fetch song page:", e)
-        return None, None
-
-    soup = BeautifulSoup(resp.text, "html.parser")
-
-    # Попытки получить название трека
-    title = None
-    # 1) <h1> часто содержит название
-    h1 = soup.find("h1")
-    if h1 and h1.text.strip():
-        title = h1.text.strip()
-    # 2) meta og:title
-    if not title:
-        og = soup.find("meta", property="og:title")
-        if og and og.get("content"):
-            title = og["content"].strip()
-
-    # Ищем mp3 ссылку: <a href="...mp3">, <audio><source src="...">, meta og:audio
-    mp3_url = None
-    # a tags
-    for a in soup.find_all("a", href=True):
-        href = a["href"]
-        if href.lower().endswith(".mp3") or ".mp3?" in href.lower():
-            mp3_url = href
-            break
-        # иногда ссылка внутренняя и ведёт к скачиванию: ищем /download/ или /get/
-        if "/get/" in href or "/download" in href:
-            if href.lower().endswith(".mp3") or ".mp3" in href:
-                mp3_url = href
-                break
-
-    # audio/source tags
-    if not mp3_url:
-        audio = soup.find("audio")
-        if audio:
-            src = audio.get("src")
-            if src and ".mp3" in src:
-                mp3_url = src
-            else:
-                source = audio.find("source")
-                if source and source.get("src"):
-                    mp3_url = source["src"]
-
-    # meta og:audio
-    if not mp3_url:
-        og_audio = soup.find("meta", property="og:audio")
-        if og_audio and og_audio.get("content"):
-            mp3_url = og_audio["content"]
-
-    # Нормализуем относительные URL'ы
-    if mp3_url and mp3_url.startswith("/"):
-        base = re.match(r"https?://[^/]+", song_url)
-        if base:
-            mp3_url = base.group(0) + mp3_url
-
-    # Иногда mp3 ссылка может быть в JS — это не покрывается (сложнее)
-    return title or "Unknown title", mp3_url
+return title or "Unknown title", mp3_url
 
 def download_file(url, filename):
     """
@@ -228,7 +97,9 @@ async def handle_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         with open(filename, "rb") as audio_f:
             await context.bot.send_audio(chat_id=query.message.chat_id, audio=audio_f, title=title)
-    except Exception as e:
+
+
+except Exception as e:
         print("Send failed:", e)
         await query.edit_message_text("Не удалось отправить аудио в чат.")
     finally:
@@ -236,21 +107,6 @@ async def handle_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             os.remove(filename)
         except Exception:
             pass
-
-import os
-from flask import Flask
-import threading
-
-# Создаем Flask приложение для работы порта
-app_flask = Flask(__name__)
-
-@app_flask.route('/')
-def home():
-    return "Music Bot is running!"
-
-def run_web_server():
-    port = int(os.environ.get('PORT', 5000))
-    app_flask.run(host='0.0.0.0', port=port)
 
 # --- Основная точка входа ---
 def main():
@@ -265,12 +121,12 @@ def main():
     web_thread.start()
     
     # Запускаем бота
-    app = ApplicationBuilder().token(token).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_search))
-    app.add_handler(CallbackQueryHandler(handle_choice))
+    app_bot = ApplicationBuilder().token(token).build()
+    app_bot.add_handler(CommandHandler("start", start))
+    app_bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_search))
+    app_bot.add_handler(CallbackQueryHandler(handle_choice))
     print("Bot started.")
-    app.run_polling()
+    app_bot.run_polling()
 
-if __name__ == "__main__":
+if name == "main":
     main()
